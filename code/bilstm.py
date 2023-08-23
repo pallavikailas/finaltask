@@ -34,7 +34,7 @@ class BiLSTM(nn.Module):
 input_size = feature_dim
 hidden_size = 64
 num_layers = 1
-num_classes = 2  # Change this based on your problem
+num_classes = 2 
 
 # Create the BiLSTM model
 model = BiLSTM(input_size, hidden_size, num_layers, num_classes)
