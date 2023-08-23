@@ -12,11 +12,11 @@ max_len = 512
 batch_size = 16
 learning_rate = 0.001
 num_epochs = 1
-d_ff = 2048  # Adjust the value based on your preference
-dropout = 0.1  # Adjust the value based on your preference
+d_ff = 2048  # Define the value of d_ff
+dropout = 0.1  # Define the value of dropout
 
 # Create the BERT model
-bert_model = BERT(vocab_size, d_model, n_layers, n_heads, max_len)
+bert_model = BERT(vocab_size, d_model, n_layers, n_heads, max_len, d_ff, dropout)
 
 # Define your loss function and optimizer
 criterion = nn.CrossEntropyLoss()

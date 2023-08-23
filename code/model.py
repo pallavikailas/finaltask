@@ -10,6 +10,7 @@ n_layers = 12
 n_heads = 12
 max_len = 70
 batch_size = 64
+d_ff = 2048  
 
 class Embedding(nn.Module):
    def __init__(self, vocab_size, d_model, max_len, n_segments=2):
@@ -74,9 +75,9 @@ class MultiHeadAttention(nn.Module):
        # q: [batch_size x len_q x d_model], k: [batch_size x len_k x d_model], v: [batch_size x len_k x d_model]
        residual, batch_size = Q, Q.size(0)
        # (B, S, D) -proj-> (B, S, D) -split-> (B, S, H, W) -trans-> (B, H, S, W)
-       q_s = self.W_Q(Q).view(batch_size, -1, n_heads, d_k).transpose(1,2)  # q_s: [batch_size x n_heads x len_q x d_k]
-       k_s = self.W_K(K).view(batch_size, -1, n_heads, d_k).transpose(1,2)  # k_s: [batch_size x n_heads x len_k x d_k]
-       v_s = self.W_V(V).view(batch_size, -1, n_heads, d_v).transpose(1,2)  # v_s: [batch_size x n_heads x len_k x d_v]
+       q_s = self.W_Q(Q).view(batch_size, -1, n_heads,self.d_k).transpose(1,2)  # q_s: [batch_size x n_heads x len_q x d_k]
+       k_s = self.W_K(K).view(batch_size, -1, n_heads, self.d_k).transpose(1,2)  # k_s: [batch_size x n_heads x len_k x d_k]
+       v_s = self.W_V(V).view(batch_size, -1, n_heads,self.d_v).transpose(1,2)  # v_s: [batch_size x n_heads x len_k x d_v]
 
        attn_mask = attn_mask.unsqueeze(1).repeat(1, n_heads, 1, 1) # attn_mask : [batch_size x n_heads x len_q x len_k]
 
@@ -90,19 +91,21 @@ class MultiHeadAttention(nn.Module):
 class ScaledDotProductAttention(nn.Module):
    def __init__(self):
        super(ScaledDotProductAttention, self).__init__()
+       self.d_k = d_k 
 
    def forward(self, Q, K, V, attn_mask):
-       scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(d_k) # scores : [batch_size x n_heads x len_q(=len_k) x len_k(=len_q)]
+       scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(self.d_k) # scores : [batch_size x n_heads x len_q(=len_k) x len_k(=len_q)]
        scores.masked_fill_(attn_mask, -1e9) # Fills elements of self tensor with value where mask is one.
        attn = nn.Softmax(dim=-1)(scores)
        context = torch.matmul(attn, V)
        return score, context, attn
    
 class BERT(nn.Module):
-   def __init__(self, vocab_size, d_model, n_layers, n_heads, max_len, n_segments=2):
+   def __init__(self, vocab_size, d_model, n_layers, n_heads, max_len, d_ff, dropout, n_segments=2):
        super(BERT, self).__init__()
        self.embedding = Embedding(vocab_size, d_model, max_len, n_segments)
-       self.layers = nn.ModuleList([EncoderLayer(d_model, d_ff, dropout) for _ in range(n_layers)])
+       self.layers = nn.ModuleList([EncoderLayer(d_ff, dropout) for _ in range(n_layers)])
+
 
    def forward(self, input_ids, segment_ids):
        output = self.embedding(input_ids, segment_ids)
