@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .bert import BERT
 
 # Define your input sequence length and feature dimension
 sequence_length = 10  # Length of each input sequence
@@ -37,11 +38,11 @@ num_layers = 1
 num_classes = 2 
 
 # Create the BiLSTM model
-model = BiLSTM(input_size, hidden_size, num_layers, num_classes)
+bert = BiLSTM(input_size, hidden_size, num_layers, num_classes)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(bert.parameters(), lr=0.001)
 
 # Generate some random training data (replace with your own data)
 X_train = torch.rand(100, sequence_length, feature_dim)
@@ -56,7 +57,7 @@ for epoch in range(epochs):
         labels = y_train[i:i+batch_size]
         
         # Forward pass
-        outputs = model(inputs)
+        outputs = bert(inputs)
         loss = criterion(outputs, labels)
         
         # Backward pass and optimization
@@ -70,7 +71,7 @@ for epoch in range(epochs):
 # Replace X_test with your test data
 X_test = torch.rand(10, sequence_length, feature_dim)
 with torch.no_grad():
-    predictions = model(X_test)
+    predictions = bert(X_test)
     _, predicted = torch.max(predictions, 1)
 
 print("Predicted classes:", predicted)
