@@ -8,9 +8,12 @@ vocab_size = 10000
 d_model = 768
 n_layers = 12
 n_heads = 12
-max_len = 70
-batch_size = 64
+max_len = 8000
+batch_size = 16
 d_ff = 2048  
+d_k = d_model // n_heads  # Define d_k based on d_model and n_heads
+d_v = d_model // n_heads
+
 
 class Embedding(nn.Module):
    def __init__(self, vocab_size, d_model, max_len, n_segments=2):
@@ -57,7 +60,7 @@ class EncoderLayer(nn.Module):
     def forward(self, enc_inputs, enc_self_attn_mask):
        
        enc_outputs, attn = self.enc_self_attn(enc_inputs, enc_inputs, enc_inputs, enc_self_attn_mask) # enc_inputs to same Q,K,V
-       enc_outputs = self.pos_ffn(enc_outputs) # enc_outputs: [batch_size x len_q x d_model]
+       enc_outputs = self.pos_ffn(enc_outputs)   # enc_outputs: [batch_size x len_q x d_model]
        return enc_outputs, attn 
    
     
@@ -82,7 +85,7 @@ class MultiHeadAttention(nn.Module):
        attn_mask = attn_mask.unsqueeze(1).repeat(1, n_heads, 1, 1) # attn_mask : [batch_size x n_heads x len_q x len_k]
 
        # context: [batch_size x n_heads x len_q x d_v], attn: [batch_size x n_heads x len_q(=len_k) x len_k(=len_q)]
-       context, attn = ScaledDotProductAttention()(q_s, k_s, v_s, attn_mask)
+       scores,context, attn = ScaledDotProductAttention()(q_s, k_s, v_s, attn_mask)
        context = context.transpose(1, 2).contiguous().view(batch_size, -1, n_heads * d_v) # context: [batch_size x len_q x n_heads * d_v]
        output = nn.Linear(n_heads * d_v, d_model)(context)
       
@@ -91,14 +94,14 @@ class MultiHeadAttention(nn.Module):
 class ScaledDotProductAttention(nn.Module):
    def __init__(self):
        super(ScaledDotProductAttention, self).__init__()
-       self.d_k = d_k 
+       self.d_k = d_model // n_heads
 
    def forward(self, Q, K, V, attn_mask):
        scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(self.d_k) # scores : [batch_size x n_heads x len_q(=len_k) x len_k(=len_q)]
        scores.masked_fill_(attn_mask, -1e9) # Fills elements of self tensor with value where mask is one.
        attn = nn.Softmax(dim=-1)(scores)
        context = torch.matmul(attn, V)
-       return score, context, attn
+       return scores, context, attn
    
 class BERT(nn.Module):
    def __init__(self, vocab_size, d_model, n_layers, n_heads, max_len, d_ff, dropout, n_segments=2):
