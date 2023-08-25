@@ -15,6 +15,7 @@ num_epochs = 3
 d_ff = 2048  # Define the value of d_ff
 dropout = 0.1  # Define the value of dropout
 
+
 # Create the BERT model
 bert_model = BERT(vocab_size, d_model, n_layers, n_heads, max_len, d_ff, dropout)
 
