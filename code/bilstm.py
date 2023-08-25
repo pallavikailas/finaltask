@@ -1,70 +1,109 @@
 import torch
 import torch.nn as nn
-from bert import BERT
+import torch.nn.functional as F
+from torch.autograd import Variable
+import numpy as np
+import random
 
-sequence_length = 10  
-feature_dim = 768    
+seed_num = 233
+pad = "<pad>"
+unk = "<unk>"
+train_data = [
+    ("This is a positive sentence.", 1),
+    ("Negative sentiment in this text.", 0),
+    # ... Add more training examples
+]
+torch.manual_seed(seed_num)
+random.seed(seed_num)
+from train import output
 
 class BiLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
+    
+    def __init__(self, args):
         super(BiLSTM, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
+        self.args = args
+        self.hidden_dim = args.lstm_hidden_dim
+        self.num_layers = args.lstm_num_layers
+        V = args.embed_num
+        D = args.embed_dim
+        C = args.class_num
+        # self.embed = nn.Embedding(V, D, max_norm=config.max_norm)
+        self.embed = nn.Embedding(V, D, padding_idx=args.paddingId)
+        # pretrained  embedding
+        if args.word_Embedding:
+            self.embed.weight.data.copy_(args.pretrained_weight)
+        self.bilstm = nn.LSTM(D, self.hidden_dim // 2, num_layers=1, dropout=args.dropout, bidirectional=True, bias=False)
+        print(self.bilstm)
 
-        # Bidirectional LSTM layer
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
-        
-        # Fully connected layer for the output (classification)
-        self.fc = nn.Linear(hidden_size * 2, num_classes)  # Multiply by 2 for bidirectional
+        self.hidden2label1 = nn.Linear(self.hidden_dim, self.hidden_dim // 2)
+        self.hidden2label2 = nn.Linear(self.hidden_dim // 2, C)
+        # self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        # Forward propagate LSTM
-        out, _ = self.lstm(x)
-        
-        # Apply softmax activation to each time step
-        out = torch.softmax(out, dim=2)  # Apply softmax along the second dimension (classes)
+        embed = self.embed(x)
+        x = embed.view(len(x), embed.size(1), -1)
+        bilstm_out, _ = self.bilstm(x)
 
-        return out
+        bilstm_out = torch.transpose(bilstm_out, 0, 1)
+        bilstm_out = torch.transpose(bilstm_out, 1, 2)
+        bilstm_out = F.tanh(bilstm_out)
+        bilstm_out = F.max_pool1d(bilstm_out, bilstm_out.size(2)).squeeze(2)
+        y = self.hidden2label1(bilstm_out)
+        y = self.hidden2label2(y)
+        logit = y
+        return logit
+class Arg:
+    def __init__(self):
+        self.lstm_hidden_dim = random.randint(50, 200)
+        self.lstm_num_layers = random.randint(1, 4)
+        self.embed_num = random.randint(1000, 5000)
+        self.embed_dim = random.randint(50, 300)
+        self.class_num = random.randint(2, 10)
+        self.pretrained_weight = random.randint(100,200)
+        self.dropout = random.uniform(0.1, 0.5)  # Adjust the range as needed
+        self.paddingId = 0  # Set this to a specific value if needed
+        self.word_Embedding = True
+args = Arg()
+# Training loop (pseudo-code)
+min_valid_loss = np.inf
+# Initialize the model
+model = BiLSTM(args)
+if torch.cuda.is_available():
+    model = model.cuda()
 
-
-hidden_size  = 64
-num_layers = 1
-num_classes = 2
-
-bert_model = BertModel.from_pretrained(bert)
-
-# Create the BiLSTM model
-input_size = feature_dim  # Input size should match the BERT output dimension
-bert = BiLSTM(input_size, hidden_size, num_layers, num_classes)
-
-# Loss and optimizer
+# Define loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(bert.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-# Training loop
-batch_size = 32
-epochs = 10
-for epoch in range(epochs):
-    for i in range(0, len(X_train), batch_size):
-        inputs = X_train[i:i+batch_size]
-        labels = y_train[i:i+batch_size]
-
-        # Forward pass through BERT
-        with torch.no_grad():  # Disable gradient computation for BERT
-            bert_output = bert_model(inputs)
-
-        # Use BERT output as input for the BiLSTM
-        lstm_input = bert_output.last_hidden_state  # Use BERT output as input
-        predictions = bert(lstm_input)
-
-        # Reshape the predictions to (batch_size * sequence_length, num_classes)
-        predictions = predictions.view(-1, num_classes)
-
-        loss = criterion(predictions, labels)  # Cross-entropy loss
-
-        # Backward pass and optimization
+for i in range(1):
+    train_loss = 0.0
+    model.forward(train_data)     # Optional when not using Model Specific layer
+    for data, labels in train_data:
+        if torch.cuda.is_available():
+            data, labels = model.cuda(), labels.cuda()
+        
         optimizer.zero_grad()
+        target = model(data)
+        loss = criterion(target,labels)
         loss.backward()
         optimizer.step()
+        train_loss += loss.item()
+    
+    valid_loss = 0.0
+    model.forward(output)     # Optional when not using Model Specific layer
+    for data, labels in train_data: #use validation loaded here
+        if torch.cuda.is_available():
+            data, labels = model.cuda(), labels.cuda()
+        
+        target = model(data)
+        loss = criterion(target,labels)
+        valid_loss = loss.item() * data.size(0)
 
-    print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+    print(f'Epoch {i+1} \t\t Training Loss: {train_loss / len(train_data)} \t\t Validation Loss: {valid_loss / len(train_data)}')
+    if min_valid_loss > valid_loss:
+        print(f'Validation Loss Decreased({min_valid_loss:.6f}--->{valid_loss:.6f}) \t Saving The Model')
+        min_valid_loss = valid_loss
+
+# Optionally, save the trained model
+torch.save(model.state_dict(), 'bilstm_with_bert_model.pth')
+
