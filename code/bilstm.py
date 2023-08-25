@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 import random
 from transformers import BertTokenizer  # You may need to install the transformers library
-
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 seed_num = 233
