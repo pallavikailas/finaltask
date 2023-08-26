@@ -10,12 +10,12 @@ from transformers import BertTokenizer, BertModel, BertConfig
 from torch import cuda
 device = 'cuda' if cuda.is_available() else 'cpu'
 
-df = pd.read_csv(r'C:\Users\KRISH DIDWANIA\Desktop\Dataset\preprocessed_train.csv')
+df = pd.read_csv(r'/Users/admin/Documents/Manipal/MRM/FINAL_TASK/final_task/preprocessed_train.csv')
 
 new_df = df[['text', 'is_humor']].copy()
 
 MAX_LEN = 200
-TRAIN_BATCH_SIZE = 8
+TRAIN_BATCH_SIZE = 1600
 VALID_BATCH_SIZE = 4
 EPOCHS = 1
 LEARNING_RATE = 1e-05
@@ -75,17 +75,14 @@ class BERTClass(torch.nn.Module):
         super(BERTClass, self).__init__()
         self.l1 = transformers.BertModel.from_pretrained('bert-base-uncased')
         self.l2 = torch.nn.Dropout(0.3)
-        self.l3 = torch.nn.Linear(768, 6)
-        self.l4=torch.nn.Linear(6,1)
-    
+        self.l3 = torch.nn.Linear(768, 1)  # Changed output dimension to 1 for binary classification
+
     def forward(self, ids, mask, token_type_ids):
-        _, output_1= self.l1(ids, attention_mask = mask, token_type_ids = token_type_ids)
-        output_1=torch.as_tensor(output_1)
-        output_2 = self.l2(output_1)
+        output_1 = self.l1(ids, attention_mask=mask, token_type_ids=token_type_ids)
+        last_hidden_state = output_1.last_hidden_state
+        output_2 = self.l2(last_hidden_state)
 
         output = self.l3(output_2)
-           
-        output=self.l4(output)
 
         return output
 
@@ -93,6 +90,8 @@ model = BERTClass()
 model.to(device)
 
 def loss_fn(outputs, targets):
+    outputs = outputs.view(-1, 1)
+    targets = targets.view(-1, 1)
     return torch.nn.BCEWithLogitsLoss()(outputs, targets)
 
 optimizer = torch.optim.Adam(params =  model.parameters(), lr=LEARNING_RATE)
