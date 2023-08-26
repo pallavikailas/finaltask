@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn import metrics
 import transformers
 import torch
+from torch import nn
 from torch.utils.data import Dataset, DataLoader, RandomSampler, SequentialSampler
 from transformers import BertTokenizer, BertModel, BertConfig
 
@@ -75,15 +76,17 @@ class BERTClass(torch.nn.Module):
         super(BERTClass, self).__init__()
         self.l1 = transformers.BertModel.from_pretrained('bert-base-uncased')
         self.l2 = torch.nn.Dropout(0.3)
-        self.l3 = torch.nn.Linear(768, 1)  # Changed output dimension to 1 for binary classification
+        self.lstm = nn.LSTM(input_size=768, hidden_size=128, num_layers=1, bidirectional=True, batch_first=True)
+        self.l3 = torch.nn.Linear(256, 6)  # Update the input size to 256 due to bidirectional LSTM
+        self.l4 = torch.nn.Linear(6, 1)
 
     def forward(self, ids, mask, token_type_ids):
         output_1 = self.l1(ids, attention_mask=mask, token_type_ids=token_type_ids)
         last_hidden_state = output_1.last_hidden_state
         output_2 = self.l2(last_hidden_state)
-
-        output = self.l3(output_2)
-
+        lstm_output, _ = self.lstm(output_2)  # Use LSTM layer
+        output = self.l3(lstm_output)
+        output = self.l4(output)
         return output
 
 model = BERTClass()
