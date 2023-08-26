@@ -3,8 +3,9 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 import re
+from sklearn.impute import SimpleImputer
 
-file_path = r'D:\final_task\dataset\train.csv'
+file_path = r'D:\final_task-7\dataset\train.csv'
 
 
 df = pd.read_csv(file_path)
@@ -42,8 +43,12 @@ def stem_text(text):
 
 df['text'] = df['text'].apply(stem_text)
 
+columns_to_fill = ['is_humor', 'humor_controversy','humor_rating','offense_rating',] 
+
+imputer = SimpleImputer(strategy='mean')
+
+df[columns_to_fill] = imputer.fit_transform(df[columns_to_fill])
 
 df.to_csv('preprocessed_train.csv', index=False)
-
 
 
