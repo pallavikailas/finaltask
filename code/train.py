@@ -17,12 +17,12 @@ device = 'cuda' if cuda.is_available() else 'cpu'
 MAX_LEN = 200
 TRAIN_BATCH_SIZE = 32
 VALID_BATCH_SIZE = 4
-EPOCHS = 10
+EPOCHS = 2
 LEARNING_RATE = 1e-05
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 max_accuracy=0
 
-df = pd.read_csv(r'/kaggle/input/nlpfinal/preprocessed_train.csv')
+df = pd.read_csv(r'/kaggle/input/train/preprocessed_train.csv')
 
 new_df = df[['text', 'is_humor']].copy()
 train_dataset=new_df.sample(random_state=200) 
@@ -49,7 +49,7 @@ def loss_fn(outputs, targets):
 
 optimizer = torch.optim.Adam(params =  model.parameters(), lr=LEARNING_RATE)
 
-df1 = pd.read_csv(r'/kaggle/input/nlpfinal/preprocessed_dev.csv')
+df1 = pd.read_csv(r'/kaggle/input/dataset/preprocessed_dev.csv')
 
 new_df1 = df1[['text', 'is_humor']].copy()
 
@@ -80,8 +80,24 @@ def validating(model):
             fin_outputs.extend(torch.sigmoid(outputs).cpu().detach().numpy().tolist())
     return fin_outputs, fin_targets
 
+def train_f1(model):
+    fin_targets=[]
+    fin_outputs=[]
+    with torch.no_grad():
+        for _, data in enumerate(training_loader, 0):
+            ids = data['ids'].to(device, dtype = torch.long)
+            mask = data['mask'].to(device, dtype = torch.long)
+            token_type_ids = data['token_type_ids'].to(device, dtype = torch.long)
+            targets = data['targets'].to(device, dtype = torch.float)
+            outputs = model(ids, mask, token_type_ids)
+            fin_targets.extend(targets.cpu().detach().numpy().tolist())
+            fin_outputs.extend(torch.sigmoid(outputs).cpu().detach().numpy().tolist())
+    return fin_outputs, fin_targets
+
 best_model=BERTClassWithFusion()
+max_accuracy =0.0
 def train(epoch):
+    global max_accuracy
     model.train()
     for _,data in enumerate(training_loader, 0):
         ids = data['ids'].to(device, dtype = torch.long)
@@ -98,16 +114,26 @@ def train(epoch):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+    
+    out1, targ1 = train_f1(model)
+    out1= (np.array(out1) >= 0.5).astype(int)
+    accuracy = metrics.accuracy_score(targ1, out1)
+    f1_score_macro = metrics.f1_score(targ1, out1, average='macro')
+    print(f"Accuracy Score Train = {accuracy}")
+    print(f"F1 Score (Macro) Train = {f1_score_macro}")
+
 
     out, targ = validating(model)
     out= (np.array(out) >= 0.5).astype(int)
     accuracy = metrics.accuracy_score(targ, out)
     if(accuracy>max_accuracy):
-        best_model=copy.deepcopy(cnn)
+        best_model=copy.deepcopy(model)
         max_accuracy=accuracy
     f1_score_macro = metrics.f1_score(targ, out, average='macro')
-    print(f"Accuracy Score = {accuracy}")
-    print(f"F1 Score (Macro) = {f1_score_macro}")
+    print(f"Accuracy Score Validate = {accuracy}")
+    print(f"F1 Score (Macro) Validate = {f1_score_macro}")
+
+    
 
 for epoch in tqdm(range(EPOCHS)):
     train(epoch) 

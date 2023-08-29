@@ -5,6 +5,8 @@ import transformers
 import torch
 from tqdm import tqdm
 from torch import nn
+from model import BERTClassWithFusion
+from dataloader import CustomDataset
 
 from torch import cuda
 device = 'cuda' if cuda.is_available() else 'cpu'
